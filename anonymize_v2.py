@@ -11,7 +11,9 @@ Everything else is kept unchanged, in the same order.
 
 Run:  python anonymize_v2.py            (optional: --in FILE --out FILE)
 """
-import argparse, json, os
+import argparse
+import json
+import os
 
 # ------------------------------------------------------------------ helpers
 def parse_args():

@@ -21,7 +21,12 @@ Exact duplicate reviews (same user, place and time) in the raw file are written 
 Run:  python anonymize_v1.py            (optional: --data DIR --out FILE --seed 42)
 Note: the rows keep the order of the raw file, which is grouped by place (gmap_id).
 """
-import argparse, json, math, os, random, re
+import argparse
+import json
+import math
+import os
+import random
+import re
 from datetime import datetime, timedelta, timezone
 
 # ------------------------------------------------------------------ time zone
