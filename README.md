@@ -113,7 +113,8 @@ error on `spent` (relative and log10), rating distribution preservation
 (share of rows in a QI group of size ≥ k). The variant gets a verdict —
 OK / WARN / REJECT — from the alarm thresholds (default: reject above
 10 % removed rows or 20 % median error on spent). Every run is appended
-to `results.csv`, one row per tested variant.
+to `results.csv`, one row per tested variant. See [RESULTS.md](RESULTS.md)
+for how to read that file.
 
 ## Output fields (current version, v5)
 

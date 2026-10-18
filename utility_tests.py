@@ -127,7 +127,11 @@ def total_variation(counter_a, counter_b):
 
 # ------------------------------------------------------------------ report
 def build_metrics(a, m, groups, ks):
-    """All metrics of one tested variant, as one flat dict."""
+    """All metrics of one tested variant, as one flat dict.
+
+    Floats are rounded to 2 decimals: the CSV is read by humans, and the
+    alarm verdicts are coarse enough that a hundredth is never decisive.
+    """
     n_base, removed = removed_rate(a.baseline, m['n'])
     rel_errs = sorted(m['spent_rel_err'])
     abs_errs = sorted(m['spent_abs_err'])
@@ -140,17 +144,17 @@ def build_metrics(a, m, groups, ks):
         'n_baseline': n_base,
         'n_current': m['n'],
         'paired': m['paired'],
-        'removed_pct': removed * 100,
-        'spent_exact_pct': m['spent_exact'] / m['n'] * 100,
-        'spent_median_rel_err_pct': median(rel_errs) * 100,
-        'spent_mean_abs_err': sum(abs_errs) / len(abs_errs),
-        'spent_median_log10_err': median(log_errs),
-        'rating_tvd': total_variation(m['rating_base'], m['rating_cur']),
+        'removed_pct': round(removed * 100, 2),
+        'spent_exact_pct': round(m['spent_exact'] / m['n'] * 100, 2),
+        'spent_median_rel_err_pct': round(median(rel_errs) * 100, 2),
+        'spent_mean_abs_err': round(sum(abs_errs) / len(abs_errs), 2),
+        'spent_median_log10_err': round(median(log_errs), 2),
+        'rating_tvd': round(total_variation(m['rating_base'], m['rating_cur']), 2),
         'days_baseline': len(m['days_base']),
         'months_current': len(m['months_cur']),
         'groups': len(groups),
-        'singleton_groups_pct': singletons / len(groups) * 100,
-        **{f'rows_ge_k{k}_pct': health[k] * 100 for k in ks},
+        'singleton_groups_pct': round(singletons / len(groups) * 100, 2),
+        **{f'rows_ge_k{k}_pct': round(health[k] * 100, 2) for k in ks},
     }
 
 def verdict(metrics, a):
