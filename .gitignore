@@ -1,8 +1,4 @@
 raw_data/
 _work/
 __pycache__/
-review-Vermont-anon-v1.json
-review-Vermont-anon-v2.json
-review-Vermont-anon-v3.json
-review-Vermont-anon-v4.json
-review-Vermont-anon-v5.json
+*.json
