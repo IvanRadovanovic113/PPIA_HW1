@@ -39,7 +39,10 @@ review-Vermont-anon-v4.json        <- current version
         |
         |  kanonymity.py
         v
-review-Vermont-anon-v5.json        <- current version
+review-Vermont-anon-v5.json
+        |  anonymize_v6.py
+        v
+review-Vermont-anon-v6.json        <- current version
 ```
 
 ## The versions
@@ -104,6 +107,13 @@ least k reviews (default k = 5):
 No rows are removed; the smallest published place group holds exactly k
 reviews.
 
+### v6 — `anonymize_v6.py`: drop the constant `state` column
+
+The `state` field was `"Vermont"` in every row: zero information, zero
+identifying power — pure schema noise. It is removed; this dataset being
+Vermont-only is documented here instead. All metrics are identical to v5
+(a constant column can always be dropped for free).
+
 ### `utility_tests.py`: data-loss tests
 
 Compares a baseline version (default v1) with the current version
@@ -116,7 +126,7 @@ OK / WARN / REJECT — from the alarm thresholds (default: reject above
 to `results.csv`, one row per tested variant. See [RESULTS.md](RESULTS.md)
 for how to read that file.
 
-## Output fields (current version, v5)
+## Output fields (current version, v6)
 
 | Field | Description |
 |-------|-------------|
@@ -129,7 +139,9 @@ for how to read that file.
 | `resp_delay_hours` | hours between review and response, or `null` |
 | `category` | recoded categories of the place (full list, first category, or `null`) — `gmap_id` is gone |
 | `spent` | amount spent in USD, tier value |
-| `state` | always `"Vermont"` |
+
+Note: this dataset covers Vermont (USA) places only — the former constant
+`state` column was dropped in v6.
 
 ## How to run
 
@@ -138,7 +150,8 @@ python anonymize_v2.py            # v1 -> v2
 python anonymize_v3.py            # v2 -> v3
 python anonymize_v4.py            # v3 -> v4
 python kanonymity.py              # v4 -> v5 (optional: --k 5)
-python utility_tests.py --label v5 --current review-Vermont-anon-v5.json \
+python anonymize_v6.py            # v5 -> v6
+python utility_tests.py --label v6 --current review-Vermont-anon-v6.json \
        --qi date,category,rating,spent     # data-loss report + results.csv
 ```
 

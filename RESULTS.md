@@ -41,7 +41,7 @@ outlier clipping + tier rounding).
 | `spent_exact_pct` | Share of reviews whose amount is **exactly** the baseline value. 100.0 until v3 (prices untouched), 7.81 from v4 on (almost every amount was clipped or rounded). |
 | `spent_median_rel_err_pct` | **The alarm metric**: median relative error on the amount. 19.2 from v4 on — under the 20 % alarm, but above the 10 % warning level, hence the WARN verdicts. |
 | `spent_mean_abs_err` | Mean absolute error in dollars ($367.12) — the figure to quote as "on average we are off by X dollars". |
-| `spent_median_log10_err` | The same median error on a log10 scale (0.08). Read it multiplicatively: the median amount is known within a factor 10^0.08 ≈ 1.2, i.e. ±20 %. This is the concrete argument for the logarithmic tiers (PLAN.md, step 6). |
+| `spent_median_log10_err` | The same median error on a log10 scale (0.08). Read it multiplicatively: the median amount is known within a factor 10^0.08 ≈ 1.2, i.e. ±20 %. This is the concrete argument for the logarithmic tiers (PLAN.md, step 7). |
 
 ## Block 3 — k-anonymity health: "how distinguishable is one review?"
 
@@ -80,7 +80,7 @@ CLI-configurable (`--removed-alarm`, `--error-alarm`):
 | Did the steps distort ratings? | `rating_tvd` | No — 0.0 everywhere; sanity check passes. |
 | What did discretizing `spent` buy? | `rows_ge_k*` between v3 and v4 | Rows in a group ≥ 3 jump from 4.15 % to 37.45 % — one decision, most of the privacy gain so far. |
 | What did replacing `gmap_id` by categories buy? | `rows_ge_k*` between v4 and v5 (mind the different `qi`) | 20.66 % → 48.04 % of rows in a group ≥ 5, at zero cost on the other metrics. |
-| What still needs work? | `singleton_groups_pct` (62.87 % at v5) and the WARN verdicts | Further generalization of `date` / `rating` (step 7 grid), and log tiers to cut the `spent` error. |
+| What still needs work? | `singleton_groups_pct` (62.87 % at v5) and the WARN verdicts | Further generalization of `date` / `rating` (step 8 grid), and log tiers to cut the `spent` error. |
 
 ## Pitfalls
 

@@ -19,8 +19,9 @@ producing one new JSON version.
 | 3 | `spent`: outlier clipping (5 % rule) + tier rounding + rarity merging | `anonymize_v4.py` → v4 | Done |
 | 4 | Data-loss tests, alarm thresholds, `results.csv` | `utility_tests.py` | Done |
 | 5 | k-anonymity: replace `gmap_id` by its categories (recoding ladder) | `kanonymity.py` → v5 | Done |
-| 6 | Logarithmic scale for the prices | option of a future step | **To do** |
-| 7 | Try several options and discuss them in the study | uses `utility_tests.py` | **To do** |
+| 6 | Drop the constant `state` column | `anonymize_v6.py` → v6 | Done |
+| 7 | Logarithmic scale for the prices | option of a future step | **To do** |
+| 8 | Try several options and discuss them in the study | uses `utility_tests.py` | **To do** |
 
 ---
 
@@ -67,7 +68,7 @@ anonymous dataset:
 Month precision strongly reduces the re-identification risk while keeping
 temporal analysis possible (seasonality, trends).
 
-**Possible refinement for step 7**: if the month is still too fine, consider
+**Possible refinement for step 8**: if the month is still too fine, consider
 the quarter (`YYYY-Qn`) or the year.
 
 ## Step 2 — `anonymize_v3.py`: lengths in 3 categories → v3
@@ -84,9 +85,9 @@ the "relevant" comments (bounds measured on v2):
 
 **Why 500**: p95 = 414 and p99 = 887 for reviews, p95 = 390 for responses —
 500 captures the tail without cutting into the body. **Alternative for
-step 7: 750**, which shrinks the `long` class to 1.5 % of reviews.
+step 8: 750**, which shrinks the `long` class to 1.5 % of reviews.
 
-**Variant kept for step 7**: a scale in steps of 50
+**Variant kept for step 8**: a scale in steps of 50
 (`comment_length // 50`). Caveat: each bin beyond 400 chars holds < 1 % of
 the reviews, so individually they violate the 5 % rule — the argument for
 folding everything above into a single `long` class.
@@ -116,7 +117,7 @@ passes, in this order (outliers would break the rounding):
    **0 / 10 / 25 / 50 / 100 / 250 / 500**, every tier between 7.3 % and
    21.5 % of the rows.
 
-**Alternative kept for step 7**: **ordered bands** instead of rounding —
+**Alternative kept for step 8**: **ordered bands** instead of rounding —
 `0–10`, `10–50`, `50–200`, `200+`… More anonymous, less precise.
 
 ## Step 4 — `utility_tests.py`: data-loss tests → `results.csv`
@@ -201,13 +202,25 @@ No rows are removed; the group below-k check found none.
 because a (month, rating, spent) combination can still be unique for one
 category group. Pushing k further means generalizing `date` (month →
 quarter → year) and `rating` (exact → {1–2, 3, 4–5}) — those axes are
-part of the step 7 variant grid.
+part of the step 8 variant grid.
+
+## Step 6 — `anonymize_v6.py`: drop the constant `state` column → v6
+
+The `state` field was `"Vermont"` in every single row: zero information,
+zero identifying power — in the published schema it is pure noise (and
+~11 useless bytes per row). It is removed; the dataset being
+Vermont-only is documented in the README instead.
+
+**Measured effect: none, by construction.** All `utility_tests.py`
+metrics of v6 are identical to v5 (the field was constant and never part
+of any QI key): 841,978 rows, verdict WARN for the same `spent` error.
+A constant column is the one thing one can always drop for free.
 
 ---
 
 # PART B — To do
 
-## Step 6 — Logarithmic scale for the prices
+## Step 7 — Logarithmic scale for the prices
 
 **Why**: spending is log-normal (the v1 model already draws
 `median * exp(N(0, spread))`). On a linear scale everything small is
@@ -229,7 +242,7 @@ already showed it: a 19.20 % linear error is only 0.082 in log10.
    linear tiers advantageously for large amounts; keep fine tiers (1, 5, 10)
    below $20 where the data is dense.
 
-## Step 7 — Try several options and discuss them in the study
+## Step 8 — Try several options and discuss them in the study
 
 Grid of variants to compare (each cell = one run, judged by
 `utility_tests.py`, logged in `results.csv`):
@@ -269,8 +282,11 @@ review-Vermont-anon-v3.json
 review-Vermont-anon-v4.json
         |  kanonymity.py     step 5 (done): gmap_id -> recoded categories
         v
-review-Vermont-anon-v5.json       <- current version
-        |  steps 6-7 (to do): log tiers, variant grid, discussion
+review-Vermont-anon-v5.json
+        |  anonymize_v6.py   step 6 (done): constant state column dropped
+        v
+review-Vermont-anon-v6.json       <- current version
+        |  steps 7-8 (to do): log tiers, variant grid, discussion
         v
 results.csv
 ```
