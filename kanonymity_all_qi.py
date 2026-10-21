@@ -2,19 +2,32 @@
 kanonymity_all_qi.py - k-anonymity on ALL quasi-identifiers together (PPIA Homework 1)
 
 Input : review-Vermont-anon-v6.json   (JSON lines, produced by anonymize_v6.py)
+        review-Vermont-anon-v2.json   (JSON lines, ONLY to recover the exact
+        comment_length / resp_length: v6 publishes just 3 length classes but
+        v7 needs 5. Steps v2->v6 never add, remove or reorder rows, so line i
+        of v6 is the same review as line i of v2 and the files can be zipped)
 Output: review-Vermont-anon-v7.json   (JSON lines, one review per line)
 
 Why: kanonymity.py enforces k only on the place (category) dimension, but
 k-anonymity is a property of the COMBINATION of quasi-identifiers. Measured
 on v6, only ~57% of reviews are in a group of >= 3 when all quasi-identifiers
 are combined. This script generalizes the quasi-identifiers and then applies
-local suppression until EVERY review is in a group of at least k (default 3).
+local suppression until EVERY review is in a group of at least k (default 5).
 
 Quasi-identifiers (what an attacker can know or see on the public review):
     category, date, rating, comment_length_cat,
     pics_num, has_resp, resp_length_cat, resp_delay_hours
 `spent` is NOT a quasi-identifier: it is synthetic, an attacker cannot know
 it in advance. It is the sensitive attribute and is left untouched here.
+
+Step 0 - length categories (from the exact v2 counts, replacing the 3-level
+          short/medium/long of v6 by 5 ordered classes, same bounds for the
+          comment and the owner response, null stays null):
+      'very short' < 10 chars    ~42% of comments (most of them 0 = no text)
+      'short'      10-49 chars   star-only + one-liners
+      'medium'     50-149 chars  informative core (q60 = 49, q80 = 140)
+      'long'       150-399 chars
+      'very long'  >= 400 chars  verbose outliers (~4.5%; p95 = 414, q99 = 887)
 
 Step 1 - global generalization (every review):
   date              'YYYY-MM'      -> 'YYYY-Qn'           (quarter)
@@ -35,10 +48,13 @@ Step 2 - local suppression (only reviews still in a group smaller than k):
     category -> null, rating -> null
   A suppressed value is written as null.
 Step 3 - record suppression (last resort): a review that is still below k
-  after all the steps above is removed. Every removal is printed (on v6 with
-  k = 3 this is a single review).
+  after all the steps above is removed. Every removal is printed.
 
-Run:  python kanonymity_all_qi.py      (optional: --in FILE --out FILE --k 3)
+Step 4 - verification: the WRITTEN v7 file is re-read from disk and the
+  k-anonymity of the combination of all 8 quasi-identifiers is re-measured
+  independently (smallest group, groups below k, group-size distribution).
+
+Run:  python kanonymity_all_qi.py      (optional: --in FILE --out FILE --k 5 --lens FILE)
 """
 import argparse
 import json
@@ -49,6 +65,21 @@ from collections import Counter, defaultdict
 QI = ['category', 'date', 'rating', 'comment_length_cat',
       'pics_num', 'has_resp', 'resp_length_cat', 'resp_delay_hours']
 POS = {q: i for i, q in enumerate(QI)}
+
+# ------------------------------------------------------------------ step 0: 5 length classes
+# Ordered bounds shared by comment and response (from the v2 exact counts:
+# 41% of comments are 0 chars, q60 = 49, q80 = 140, p95 = 414, q99 = 887).
+LENGTH_BOUNDS = [(10, 'very short'), (50, 'short'), (150, 'medium'),
+                 (400, 'long'), (float('inf'), 'very long')]
+LENGTH_CATS = [label for _, label in LENGTH_BOUNDS]
+
+def length_category(n):
+    """Exact character count -> one of the 5 ordered classes (None stays None)."""
+    if n is None:
+        return None
+    for limit, label in LENGTH_BOUNDS:
+        if n < limit:
+            return label
 
 # ------------------------------------------------------------------ generalization: date
 def to_quarter(date):
@@ -137,11 +168,11 @@ def delay_bucket(hours):
         if hours <= limit:
             return label
 
-def generalize(row):
-    """Published row -> list of generalized quasi-identifier values (order of QI)."""
+def generalize(row, clen, rlen):
+    """Published row + 5-level length classes -> generalized QI (order of QI)."""
     return [to_broad_group(row['category']), to_quarter(row['date']), row['rating'],
-            row['comment_length_cat'], cap_pics(row['pics_num']), row['has_resp'],
-            row['resp_length_cat'], delay_bucket(row['resp_delay_hours'])]
+            clen, cap_pics(row['pics_num']), row['has_resp'],
+            rlen, delay_bucket(row['resp_delay_hours'])]
 
 # ------------------------------------------------------------------ local suppression
 year_only = lambda d: d[:4] if d else d
@@ -194,36 +225,46 @@ def negative_share(rows_rating_len):
             continue
         tot[length] += 1
         neg[length] += rating <= 2
-    return {c: 100 * neg[c] / tot[c] for c in ('short', 'medium', 'long') if tot[c]}
+    return {c: 100 * neg[c] / tot[c] for c in LENGTH_CATS if tot[c]}
 
 # ------------------------------------------------------------------ main
 def parse_args():
     here = os.path.dirname(os.path.abspath(__file__))
     ap = argparse.ArgumentParser()
     ap.add_argument('--in', dest='infile', default=os.path.join(here, 'review-Vermont-anon-v6.json'))
+    ap.add_argument('--lens', dest='lensfile', default=os.path.join(here, 'review-Vermont-anon-v2.json'),
+                    help='earlier file with the EXACT comment_length / resp_length (same row order)')
     ap.add_argument('--out', default=os.path.join(here, 'review-Vermont-anon-v7.json'))
-    ap.add_argument('--k', type=int, default=3, help='minimum group size (default 3)')
+    ap.add_argument('--k', type=int, default=5, help='minimum group size (default 5)')
     return ap.parse_args()
 
 def main():
     a = parse_args()
 
-    # pass 1: read, remember the published QI, build the generalized QI
+    # the exact lengths come from an earlier file: rows must align by line index
+    with open(a.infile, encoding='utf-8') as f, open(a.lensfile, encoding='utf-8') as fl:
+        n_in, n_lens = sum(1 for _ in f), sum(1 for _ in fl)
+    if n_in != n_lens:
+        raise SystemExit(f'{a.infile} ({n_in:,} rows) and {a.lensfile} ({n_lens:,} rows) '
+                         'differ in row count - rows cannot be aligned by line index')
+
+    # pass 1: read v6, recover the exact lengths from the earlier file, build the generalized QI
     published, keys = [], []
     first_cats = defaultdict(Counter)                  # group -> first categories (for review)
     utility_before = []
-    with open(a.infile, encoding='utf-8') as f:
-        for line in f:
-            row = json.loads(line)
+    with open(a.infile, encoding='utf-8') as f, open(a.lensfile, encoding='utf-8') as fl:
+        for line, len_line in zip(f, fl):
+            row, raw = json.loads(line), json.loads(len_line)
             cats = row['category']
+            clen = length_category(raw.get('comment_length') or 0)   # 5-level, from v2
+            rlen = length_category(raw.get('resp_length'))
             published.append((tuple(sorted(cats)) if cats else None, row['date'], row['rating'],
-                              row['comment_length_cat'], row['pics_num'], row['has_resp'],
-                              row['resp_length_cat'], row['resp_delay_hours']))
-            g = generalize(row)
-            keys.append(g)
+                              clen, row['pics_num'], row['has_resp'],
+                              rlen, row['resp_delay_hours']))
+            keys.append(generalize(row, clen, rlen))
             if cats:
-                first_cats[g[0]][cats[0]] += 1
-            utility_before.append((row['rating'], row['comment_length_cat']))
+                first_cats[keys[-1][0]][cats[0]] += 1
+            utility_before.append((row['rating'], clen))
     n = len(keys)
     print(f'reviews read: {n:,}   k = {a.k}   (spent untouched: sensitive attribute)')
 
@@ -242,7 +283,7 @@ def main():
             cov, notc, uniq, groups, smallest = coverage(ks, a.k, upto)
             print(f'  {label:32s}{cov:9.2f}%{notc:9.2f}%{uniq:8.2f}%{groups:10,}{smallest:10,}')
 
-    report('BEFORE (published v6):', published)
+    report('BEFORE (published v6, 5-level lengths from the earlier file):', published)
     report('AFTER step 1 - generalization:', keys)
 
     # step 2: local suppression
@@ -264,7 +305,7 @@ def main():
     after = negative_share((key[POS['rating']], key[POS['comment_length_cat']]) for key in final)
     print('\nUtility check - % negative (1-2 stars) by comment length:')
     for c in before:
-        print(f'  {c:7s} before {before[c]:5.1f}%   after {after.get(c, float("nan")):5.1f}%')
+        print(f'  {c:11s} before {before[c]:5.1f}%   after {after.get(c, float("nan")):5.1f}%')
 
     # pass 2: write v7 with the final values
     with open(a.infile, encoding='utf-8') as f, open(a.out, 'w', encoding='utf-8', newline='\n') as o:
@@ -276,6 +317,28 @@ def main():
                 row[q] = v
             o.write(json.dumps(row, ensure_ascii=False) + '\n')
     print(f'\nwritten: {n - len(removed):,} reviews -> {a.out}')
+
+    # step 4: independent verification - re-read the WRITTEN file and re-measure k
+    sizes = Counter()
+    with open(a.out, encoding='utf-8') as f:
+        for line in f:
+            row = json.loads(line)
+            key = tuple(row[q] for q in QI)
+            sizes[key] += 1
+    below = {key: s for key, s in sizes.items() if s < a.k}
+    ordered = sorted(sizes.values())
+    print(f'\nStep 4 - verification (re-read {a.out}):')
+    print(f'  rows {sum(ordered):,}   groups {len(sizes):,}')
+    print(f'  smallest group {ordered[0]}   groups below k = {a.k}: {len(below)}'
+          + ('' if not below else '  WARNING: ' + str(list(below.values())[:10])))
+    print(f'  group size: median {ordered[len(ordered)//2]:,}   '
+          f'p90 {ordered[int(len(ordered)*0.9)]:,}   largest {ordered[-1]:,}')
+    nulls = {q: sum(1 for key in sizes if key[POS[q]] is None) for q in QI}
+    print('  groups with the field suppressed (null):')
+    for q, cnt in nulls.items():
+        print(f'    {q:20s} {100 * cnt / len(sizes):5.1f}% of groups')
+    assert not below, f'k-anonymity NOT satisfied: {len(below)} group(s) below k = {a.k}'
+    print(f'  k-anonymity (k = {a.k}) satisfied on the published file')
 
 if __name__ == '__main__':
     main()
